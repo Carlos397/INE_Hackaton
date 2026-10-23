@@ -1,0 +1,110 @@
+---
+title: "Datos Baja California"
+author: ""
+date: "2026-10-23"
+output: pdf_document
+---
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+options(scipen = 999)
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+datos_nl <- read_csv("datosabiertos_deceyec_conteoscensales2024_bc.csv")
+View(datos_nl)
+
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+crear_pastel <- function(titulo, estado, votaron, noVotaron, votoIndeterminado, votosTotales, tamaño){
+  p <- ggplot(data.frame(
+    Estado = c("Votaron", "No votaron", "Voto indeterminado"),
+    Porcentaje = c((votaron / votosTotales)*100, (noVotaron / votosTotales)*100, (votoIndeterminado / votosTotales)*100)
+), aes(x = "", y = Porcentaje, fill = Estado)) +
+    geom_bar(stat = "identity", width = 1, color = "white") +
+    coord_polar("y", start = 0) +
+    geom_text(aes(label = paste0(round(Porcentaje, 1), "%")),
+              position = position_stack(vjust = 0.5),
+              color = "white", fontface = "bold", size = tamaño) +
+    scale_fill_manual(values = c("Votaron" = "green", "No votaron" = "red", "Voto indeterminado" = "blue")) +
+    theme_void() +
+    labs(title = titulo, fill = "Condición")
+  print(p)
+}
+1
+estado <- datos_nl$EDONOM[1]
+titulo <- paste("Porcentaje de votos del estado de", estado)
+
+votos_municipio <- datos_nl %>%
+  group_by(MPIONOM, MPIOCVE) %>%
+  summarize(votosTotales = sum(LN, na.rm = TRUE),votan = sum(SV, na.rm = TRUE), noVotan = sum(NV, na.rm = TRUE), votosIndeterminados = sum(NS, na.rm = TRUE))
+
+crear_pastel(titulo, Estado, sum(votos_municipio$votan), sum(votos_municipio$noVotan), sum(votos_municipio$votosIndeterminados), sum(votos_municipio$votosTotales), 4)
+
+municipios <- unique(datos_nl$MPIONOM)
+
+  datos_con_rangos <- datos_nl %>%
+  mutate(
+    rango_edad = case_when(
+      EDAD >= 18 & EDAD <= 24 ~ "18-24 años",
+      EDAD >= 25 & EDAD <= 29 ~ "25-29 años",
+      EDAD >= 30 & EDAD <= 39 ~ "30-39 años",
+      EDAD >= 40 & EDAD <= 49 ~ "40-49 años",
+      EDAD >= 50 & EDAD <= 59 ~ "50-59 años",
+      EDAD >= 60 & EDAD <= 69 ~ "60-69 años",
+      EDAD >= 70 ~ "+70 años",
+      TRUE ~ "No especificado"
+    )
+  )
+
+votos_edad_estado <- datos_con_rangos %>%
+  group_by(rango_edad) %>%
+  summarize(votos_totales = sum(SV, na.rm = TRUE), .groups = "drop")
+
+ggplot(votos_edad_estado, aes(x = rango_edad, y = votos_totales, fill = rango_edad)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  theme_minimal() +
+  labs(
+    title = paste("Participación por Rango de Edad en el Estado de", estado),
+    x = "Rango de Edad",
+    y = "Total de Votos",
+    fill = "Edad"
+  ) +
+  scale_fill_brewer(palette = "Set3") +
+  guides(fill = "none")
+
+
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.width=4, fig.height=4, fig.show="hold", out.width="50%"}
+
+
+for (i in 1:length(municipios)) {
+  votos <- votos_municipio |> filter(MPIONOM == municipios[i])
+  titulo <- paste("Porcentaje de votos en el municipio \n", municipios[i]," del estado de", estado)
+  
+  crear_pastel(titulo, estado, votos$votan, votos$noVotan, votos$votosIndeterminados, votos$votosTotales, 2)
+  
+  datos_muni_edad <- datos_con_rangos %>%
+    filter(MPIONOM == municipios[i]) %>%
+    group_by(rango_edad) %>%
+    summarize(votos_totales = sum(SV, na.rm = TRUE), .groups = "drop")
+    titulo_muni <- paste("Votos por Rango de Edad en:\n", municipios[i])
+    
+  p <- ggplot(datos_muni_edad, aes(x = rango_edad, y = votos_totales, fill = rango_edad)) +
+    geom_bar(stat = "identity", width = 0.6) +
+    theme_minimal() +
+    labs(
+      title = titulo_muni,
+      x = "Rango de Edad",
+      y = "Total de Votos",
+      fill = "Edad"
+    ) +
+    scale_fill_brewer(palette = "Set3") +
+    guides(fill = "none")
+  
+  print(p)
+}
+
+```
